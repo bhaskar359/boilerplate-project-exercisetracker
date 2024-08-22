@@ -25,21 +25,33 @@ app.get('/api/users', (req, res) => {
 })
 
 app.post('/api/users/:_id/exercises', (req, res) => {
-  console.log(users);
-  let { description, duration, date } = req.body;
-  let { _id } = req.params
-  console.log(_id, duration, description, date)
-  if (!date) {
-    date = new Date();
-  }
-  date = new Date(date);
+  const userId = req.params._id;
+  const description = req.body.description;
+  const duration = parseInt(req.body.duration);
+  const date = req.body.date ? new Date(req.body.date) : new Date();
 
-  let exercise = { description, duration: Number(duration), date: date.toDateString() };
-  if (_id in users) {
-    users[_id]["log"] = [exercise]
-    console.log(users);
-    res.json({ _id, username: _id, ...exercise });
+  const u = Object.values(users).filter((u) => u._id === userId)[0];
+  if (!u) {
+    res.sendStatus(404);
+    return res.json(err("user not found"));
   }
+
+  if (!u.log) {
+    u.log = [];
+  }
+  const ex = { description, duration, date: date.toDateString() };
+  u.log.push(ex);
+  users[u.username] = u;
+
+  res.json({
+    _id: u._id,
+    username: u.username,
+    description: ex.description,
+    duration: ex.duration,
+    // WTF: need to return toDateString() instead of using date object
+    // https://forum.freecodecamp.org/t/apis-and-microservices-projects-exercise-tracker/364236/7
+    date: date.toDateString(),
+  });
 
 })
 
@@ -49,9 +61,9 @@ app.post('/api/users/:_id/exercises', (req, res) => {
 //     let userObj = users._id;
 //     userObj["count"] = userObj.log.length;
 //     res.json(userObj);
-//   }
-
+//   }  
 // })
+
 
 app.get("/api/users/:_id/logs", (req, res) => {
   const userId = req.params._id;
@@ -62,27 +74,28 @@ app.get("/api/users/:_id/logs", (req, res) => {
     return res.json(err("user not found"));
   }
 
-  let from = req.params.from;
+  let from = req.query.from;
   from = from ? new Date(from) : new Date(0);
   const start = from.getTime();
 
-  let to = req.params.to;
+  let to = req.query.to;
   to = to ? new Date(to) : new Date();
   const end = to.getTime();
 
-  let limit = Number(req.params.limit);
+  let limit = req.query.limit;
 
   let log = u.log
     .filter((ex) => {
-      const ts = new Date(ex.date)?.getTime();
+      const ts = new Date(ex.date).getTime();
       return ts >= start && ts <= end;
     })
-    .sort((a, b) => new Date(a.date)?.getTime() - new Date(b.date)?.getTime());
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   limit = parseInt(limit);
   if (limit !== 0 && !isNaN(limit) && log.length > limit) {
     log = log.slice(0, limit);
   }
+
 
   const r = {
     _id: u._id,
@@ -91,6 +104,11 @@ app.get("/api/users/:_id/logs", (req, res) => {
     log: log,
   };
 
+  if (from && to) {
+    r["from"] = new Date(from).toDateString();
+    r["to"] = new Date(to).toDateString();
+  }
+  console.log(r);
   return res.json(r);
 });
 
